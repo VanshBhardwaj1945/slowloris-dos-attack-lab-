@@ -42,7 +42,7 @@ I built an isolated sandbox in VirtualBox and used pfSense as the firewall/route
 **Monitoring**: Splunk (configured to ingest `/var/log/apache2/access.log` and `/var/log/apache2/error.log`)
 
 _Place topology screenshot here (VirtualBox VM list or diagram):_  
-![Topology](assets/screenshots/01-topology.png)
+![Topology]([assets/screenshots/01-topology.png](https://github.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/blob/cf5fccc1b5b7a5bbd10ab70b4e12ae4c1638c9c6/assets/Topology.png))
 
 ---
 
