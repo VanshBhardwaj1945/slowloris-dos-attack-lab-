@@ -18,7 +18,7 @@ I executed an application-layer Denial-of-Service (DoS) against an Apache2 web s
 - SIEM ingestion and monitoring (Splunk)  
 - Reconnaissance with `nmap`  
 - Network forensics (Splunk)  
-- Host forensics (`ss` / `netstat`, Apache logs)  
+- Host forensics (Apache logs)  
 - Reproducible documentation and defensive recommendations
 
 ---
@@ -52,7 +52,6 @@ I configured Splunk to ingest the two Apache log files from the victim VM:
 - `/var/log/apache2/access.log` (sourcetype: `apache:access`)  
 - `/var/log/apache2/error.log` (sourcetype: `apache:error`)
 
-Add Splunk screenshots to show ingestion:
 
 # Pre-Attack Assessment 
 
