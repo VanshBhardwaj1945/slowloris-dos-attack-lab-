@@ -118,7 +118,7 @@ Add Splunk screenshots to show ingestion:
 
 **1. Apache error.log evidence**
 
-- Splunk showed MaxRequestWorkers reached and similar exhaustion errors while the attack was running. (splunk-maxrequestworkers.png.)
+- Splunk showed MaxRequestWorkers reached and similar exhaustion errors while the attack was running. 
 
   <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/splunk-maxrequestworkers.png" alt="Splunk Max Request Workers Chart" width="600">
 
