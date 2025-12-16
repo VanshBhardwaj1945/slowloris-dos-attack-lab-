@@ -17,7 +17,7 @@ I executed an application-layer Denial-of-Service (DoS) against an Apache2 web s
 - VirtualBox sandbox and pfSense topology management  
 - SIEM ingestion and monitoring (Splunk)  
 - Reconnaissance with `nmap`  
-- Network forensics (tcpdump / Wireshark)  
+- Network forensics (Splunk)  
 - Host forensics (`ss` / `netstat`, Apache logs)  
 - Reproducible documentation and defensive recommendations
 
@@ -31,12 +31,12 @@ Slowloris-style attacks can render web services unavailable while using very lit
 ## Lab environment & brief topology
 I built an isolated sandbox in VirtualBox and used pfSense as the firewall/router between two /24 subnets.
 
-**Network A (internal)** — `192.168.1.0/24`  
-- Ubuntu (Victim / Apache2): **`192.168.1.10`**  
-- Windows XP (Workstation): `192.168.1.20`
+**Network A (internal)** — `192.168.1.1/24`  
+- Ubuntu (Web Server / Victimm / Apache2): **`192.168.1.10`**  
+- Windows XP (Workstation): `192.168.1.15`
 
-**Network B (attacker / external)** — `192.168.2.0/24`  
-- Kali Linux (Attacker): **`192.168.2.10`**
+**Network B (attacker / external)** — `192.168.2.1/24`  
+- Kali Linux (Attacker): **`192.168.2.16`**
 
 **Router / Firewall**: pfSense (LAN <-> Network A, OPT1/WAN <-> Network B)  
 **Monitoring**: Splunk (configured to ingest `/var/log/apache2/access.log` and `/var/log/apache2/error.log`)
@@ -54,168 +54,129 @@ I configured Splunk to ingest the two Apache log files from the victim VM:
 
 Add Splunk screenshots to show ingestion:
 
-# Reconnaissance — exact commands I used
+# Pre-Attack Assessment 
 
 **From the attacker (Kali):**
 - **Quick port/service scan**
   
   <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/503a6d2df94b20090fcf65b02b8dff522f44c16c/assets/nmap-before.png" alt="Nmap Scan Before Attack" width="500">
 
-****Confirm HTTP service****
-- **curl -I http://192.168.1.10/**
+- ****Confirm HTTP service****
+  ```bash
+  $ curl http://192.168.1.10/testsplunk
+  ```
+
+  <div style="display: flex; gap: 20px;">
+    <img 
+    src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/e1d86277e7dc1562869b93d4e2f61481ca64b43f/assets/curl-before.png"
+    alt="Curl Output Before Attack"
+    width="425"
+    >
+    <img 
+    src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/main/assets/curlLog-before.png"
+    alt="Curl Log Before Attack"
+    width="460"
+    >
+  </div>
 
 
-Pre-attack tuning (what I changed on Kali)
-Slowloris uses lots of sockets; I increased file-descriptor limits on Kali before running:
+# Pre-attack tuning (what I changed on Kali)(((
+- ***Slowloris uses lots of sockets***
+- ***So I increased file-descriptor limits on Kali before running***
 
-bash
-Copy code
-# temporary increase for the shell
-ulimit -n 65536
+  - Soft Limit
+    ```bash
+    $   ulimit -S -n 8192
+    ```
+    
+  - Hard Limit 
+    ```bash
+    $   ulimit -S -n 16384
+    ```
+    
+# Executing Slowloris Attack 
+***Command Used***
 
-# optional: make system-wide via sysctl (example)
-echo "fs.file-max = 100000" | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
-Confirm new limit:
+    
+    $   slowloris -v -0 80 -s 1500 --sleeptime 192.168.1.10
+    
+    
+***Command Explanation***
+- -v = verbose
+- -p 80 = HTTP port
+- -s 1500 = socket count (tuned to VM limits)
+- --sleeptime 10 = seconds between header refreshes
 
-bash
-Copy code
-ulimit -n
-Attack execution — exact command I used
-Command I ran from Kali (attacker):
+***Slowloris Running***
 
-bash
-Copy code
-# run tcpdump (optional capture)
-sudo tcpdump -i eth0 port 80 -w /tmp/slowloris_attacker.pcap &
+***How I verified this was Slowloris (evidence & indicators)***
 
-# execute slowloris
-slowloris -v -p 80 -s 1500 --sleeptime 10 192.168.1.10
--v = verbose
+- I confirmed the attack type by correlating three independent indicators (these are exactly the things I used):
 
--p 80 = HTTP port
+**1. Apache error.log evidence**
 
--s 1500 = socket count (tuned to VM limits)
+- Splunk showed MaxRequestWorkers reached and similar exhaustion errors while the attack was running. (splunk-maxrequestworkers.png.)
 
---sleeptime 10 = seconds between header refreshes
+**2. Apache access.log patterns**
 
-How I verified this was Slowloris (evidence & indicators)
-I confirmed the attack type by correlating five independent indicators (these are exactly the things I used):
-
-A. Apache error.log evidence
-
-Splunk showed MaxRequestWorkers reached and similar exhaustion errors while the attack was running. (See 06-apache-errorlog-snippet.txt and 04-splunk-maxrequestworkers.png.)
-
-B. Apache access.log patterns
-
-Access log showed many long-running, partial requests and HTTP 408/timeouts during the attack. (See 07-accesslog-408s.png.)
-
-C. Host socket table (ss/netstat)
-
-ss -antp | grep :80 returned hundreds of connections in ESTABLISHED (long-lived) state from the attacker IP. (Saved as 05-ss-output.txt.)
-
-D. Wireshark network evidence
-
-Packet capture showed many HTTP connections with incomplete headers and very slow header refresh behavior from the same source IP — classic Slowloris traffic. (See 03-wireshark-partial-headers.png.)
-
-E. Application-level availability effect
-
-curl from another terminal timed out or stalled while ICMP (ping) still worked — indicating application-layer (HTTP) exhaustion rather than network down. I verified this in real-time while monitoring Splunk.
-
-Because all five indicators aligned (error logs, access logs, socket table, packet-level partial header behavior, and application-level failure), I concluded the observed behavior was Slowloris.
-
-Evidence (place these exact files in assets/screenshots/)
-01-topology.png — topology / VirtualBox screenshot
-
-02-nmap-before.png — nmap output showing port 80 open
-
-03-wireshark-partial-headers.png — wireshark screenshot showing partial/incomplete HTTP headers
-
-04-splunk-maxrequestworkers.png — Splunk screenshot showing MaxRequestWorkers or worker exhaustion
-
-05-ss-output.txt — ss -antp | grep :80 output saved to text file
-
-06-apache-errorlog-snippet.txt — relevant Apache error.log lines
-
-07-accesslog-408s.png — Splunk or screenshot of access log 408/timeouts
-
-08-tcpdump-attacker.pcap — optional attacker pcap (downloadable)
-
-Embed examples below (these lines render the images / text in the README when files exist):
+- Access log showed many long-running, partial requests and HTTP 408/timeouts during the attack. (accesslog-408s.png.)
 
 
+**3. Application-level availability effect**
+
+- curl from another terminal timed out or stalled while ICMP (ping) still worked — indicating application-layer (HTTP) exhaustion rather   than network down. I verified this in real-time while monitoring Splunk.
+
+Because all five indicators aligned (error logs, access logs,and application-level failure), I concluded the observed behavior was Slowloris.
 
 
+# Analysis — why the attack worked
 
-05-ss-output.txt and 06-apache-errorlog-snippet.txt will render as text files when uploaded.
+***Quick executive takeaway***
 
-Splunk detection queries I used (copyable)
-text
-Copy code
-# Find MaxRequestWorkers / Apache exhaustion errors
-index=main sourcetype=apache:error "MaxRequestWorkers" OR "server reached MaxRequestWorkers"
+- This Slowloris attack succeeded by exhausting Apache’s request‑handling capacity, not by overwhelming network bandwidth. I demonstrated the attack, observed the failure mode in real time, and mapped it directly to defensive controls.
 
-# Show long-duration requests (example)
-index=main sourcetype=apache:access | eval duration=_time - _indextime | where duration > 60
+***What the attack does*** 
+- Opens many HTTP connections to Apache
+- Sends incomplete HTTP headers very slowly
+- keeps connections alive indefinitely by periodically refreshing headers
+- Prevents requests from ever completing
+  
+***What Apache did internally***
+- Assigned a worker thread/process to each incoming connection
+- Waited for headers to fully arrive before releasing the worker
+- Allowed connections to remain open due to permissive timeout settings
+- Eventually reached the MaxRequestWorkers limit
 
-# Count connections per IP from access logs
-index=main sourcetype=apache:access | stats count by clientip | sort -count
-Set up an alert on the first query to trigger a notification or automated pfSense block.
+***Why hypothetical users were impacted***
+- Once all workers were consumed, Apache could not process new HTTP requests
+- clients experienced stalled or timed‑out connections
+- ICMP traffic continued to function, confirming the host and network were still up
+- This confirmed an application‑layer denial of service, not a network outage
 
-Analysis — why the attack worked
-Slowloris holds partial HTTP connections open and refreshes headers slowly. Apache worker threads/processes remain occupied waiting for the request to complete, so when MaxRequestWorkers is reached, new legitimate requests get blocked or stall. Key factors I observed:
+***Why the environment was vulnerable***
+- Apache worker limits were low relative to the attack’s socket volume
+- Header and keep‑alive timeouts allowed connections to persist too long
+- Kali’s increased file‑descriptor limit (ulimit -n) enabled thousands of concurrent sockets with minimal bandwidth usage
 
-Low default Apache worker settings relative to attack socket count
+***How I confirmed it was Slowloris***
+- Apache error logs showed worker exhaustion (MaxRequestWorkers reached)
+- Packet captures showed partial and incomplete HTTP headers
+- Splunk correlated Apache errors with service unavailability during the attack window
+- Live testing showed HTTP failure while other protocols remained responsive
 
-Keep-alive / header timeouts allowing connections to remain open
+***Security impact***
+- A small number of attacker resources caused full service degradation
+- Traditional network‑volume monitoring would not detect this attack
+- Proper application‑layer logging and alerting were required to identify the root cause
 
-Attacker's increased ulimit -n enabling hundreds/thousands of sockets
+***Why this matters to security roles***
+- Demonstrates understanding of application‑layer DoS mechanics
+- Shows ability to validate attacks using SIEM, packet analysis, and live service testing
+- Connects technical behavior to concrete mitigation strategies
+- Reflects real SOC, security engineering, and GRC decision‑making skills
 
-Defenses & recommendations
-Server-level
 
-Enable and tune mod_reqtimeout to limit header/body read times
+# Ethical notice & scope
 
-Reduce KeepAliveTimeout and tune MaxRequestWorkers
-
-Use mod_evasive to mitigate abusive clients
-
-Network/Architectural
-
-Place a reverse proxy (Nginx/HAProxy) or CDN in front of Apache
-
-Use a WAF that detects slow HTTP patterns
-
-Rate-limit per IP on pfSense (or cloud layer)
-
-Operational
-
-Create Splunk alerts for MaxRequestWorkers and sudden spikes of long-lived requests
-
-Automate temporary IP blocking in pfSense when thresholds are exceeded
-
-Reproducible steps (short)
-Restore clean snapshots for victim and attacker VMs.
-
-Confirm Apache is running and Splunk is ingesting logs:
-
-bash
-Copy code
-sudo systemctl status apache2
-curl -I http://192.168.1.10/
-On Kali, set ulimit -n 65536.
-
-Start tcpdump (optional): sudo tcpdump -i eth0 port 80 -w /tmp/slowloris_attacker.pcap &
-
-Run Slowloris:
-
-bash
-Copy code
-slowloris -v -p 80 -s 1500 --sleeptime 10 192.168.1.10
-Observe Splunk, ss, Apache logs, and Wireshark for the evidence described above.
-
-Stop attack and restore snapshots.
-
-Ethical notice & scope
 All testing was performed inside an authorized, isolated lab environment. This documentation is for defensive education only. Do not run these steps against systems you do not own or are not authorized to test.
 
