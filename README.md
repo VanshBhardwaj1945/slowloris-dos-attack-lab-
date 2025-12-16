@@ -8,7 +8,7 @@
 ---
 
 ## High-level summary
-I executed an application-layer Denial-of-Service (DoS) against an Apache2 web server inside an isolated VirtualBox sandbox using the classic Slowloris technique. I configured Splunk to ingest the Apache `access.log` and `error.log`, tuned the attacking VM to allow many sockets, launched Slowloris from Kali, and validated the attack using Splunk, Wireshark, host-level tooling, and direct HTTP tests. This repo contains the evidence, exact commands, detection queries, and recommended mitigations.
+I executed an application-layer Denial-of-Service (DoS) against an Apache2 web server inside an isolated VirtualBox sandbox using the classic Slowloris technique. I configured Splunk to ingest the Apache `access.log` and `error.log`, tuned the attacking VM to allow many sockets, launched Slowloris from Kali, and validated the attack using Splunk, host-level tooling, and direct HTTP tests. This repo contains the evidence, exact commands, detection queries, and recommended mitigations.
 
 ---
 
@@ -109,24 +109,30 @@ Add Splunk screenshots to show ingestion:
 
 ***Slowloris Running***
 
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/slowloris-attack.png" alt="Slowloris Attack Visualization" width="500">
+
+
 ***How I verified this was Slowloris (evidence & indicators)***
 
-- I confirmed the attack type by correlating three independent indicators (these are exactly the things I used):
+- I confirmed the attack type by correlating two independent indicators (these are exactly the things I used):
 
 **1. Apache error.log evidence**
 
 - Splunk showed MaxRequestWorkers reached and similar exhaustion errors while the attack was running. (splunk-maxrequestworkers.png.)
 
-**2. Apache access.log patterns**
-
-- Access log showed many long-running, partial requests and HTTP 408/timeouts during the attack. (accesslog-408s.png.)
+  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/splunk-maxrequestworkers.png" alt="Splunk Max Request Workers Chart" width="600">
 
 
-**3. Application-level availability effect**
+**2. Application-level availability effect**
 
-- curl from another terminal timed out or stalled while ICMP (ping) still worked — indicating application-layer (HTTP) exhaustion rather   than network down. I verified this in real-time while monitoring Splunk.
+- curl from another terminal stalled
+- while ICMP (ping) still worked
+- indicating application-layer (HTTP) exhaustion rather than network down 
 
-Because all five indicators aligned (error logs, access logs,and application-level failure), I concluded the observed behavior was Slowloris.
+  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/ping-after.png" alt="Ping After Attack" width="500">
+
+
+Because all both indicators aligned (error logs and application-level failure), I concluded the observed behavior was Slowloris.
 
 
 # Analysis — why the attack worked
