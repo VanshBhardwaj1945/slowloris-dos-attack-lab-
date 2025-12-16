@@ -41,8 +41,8 @@ I built an isolated sandbox in VirtualBox and used pfSense as the firewall/route
 **Router / Firewall**: pfSense (LAN <-> Network A, OPT1/WAN <-> Network B)  
 **Monitoring**: Splunk (configured to ingest `/var/log/apache2/access.log` and `/var/log/apache2/error.log`)
 
-_Place topology screenshot here (VirtualBox VM list or diagram):_  
-![Topology] (/assets/Topology.png)
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/9eeca3498fec829bbb37bbe6dd78d8206148d887/assets/Topology.png" alt="Lab Network Topology" width="500">
+
 
 ---
 
@@ -55,16 +55,15 @@ I configured Splunk to ingest the two Apache log files from the victim VM:
 Add Splunk screenshots to show ingestion:
 
 # Reconnaissance — exact commands I used
-From the attacker (Kali):
 
-bash
-Copy code
-# Quick port/service scan
-nmap -sS -T4 -F 192.168.1.10
+**From the attacker (Kali):**
+- **Quick port/service scan**
+  
+  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/503a6d2df94b20090fcf65b02b8dff522f44c16c/assets/nmap-before.png" alt="Nmap Scan Before Attack" width="500">
 
-# Confirm HTTP service
-curl -I http://192.168.1.10/
-Add nmap screenshot here:
+****Confirm HTTP service****
+- **curl -I http://192.168.1.10/**
+
 
 Pre-attack tuning (what I changed on Kali)
 Slowloris uses lots of sockets; I increased file-descriptor limits on Kali before running:
