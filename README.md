@@ -1,187 +1,202 @@
-# Slowloris Application-Layer DoS — Targeted Research (Lab)
-
-**Project type:** Targeted Research / Exploit (sandbox only)  
-**Role:** Attacker (I executed and documented the attack)  
-**Author:** I did this (Vansh Bhardwaj)  
+# Slowloris Application-Layer DoS — Targeted Research (Lab)  
+**Repo:** https://github.com/VanshBhardwaj1945/slowloris-dos-attack-lab-  
+**Project type:** Targeted research (authorized sandbox only)  
+**Role:** Test executor (authorized lab)  
 **Date:** December 2, 2025
 
----
+## Table of Contents
 
-## High-level summary
-I executed an application-layer Denial-of-Service (DoS) against an Apache2 web server inside an isolated VirtualBox sandbox using the classic Slowloris technique. I configured Splunk to ingest the Apache `access.log` and `error.log`, tuned the attacking VM to allow many sockets, launched Slowloris from Kali, and validated the attack using Splunk, host-level tooling, and direct HTTP tests. This repo contains the evidence, exact commands, detection queries, and recommended mitigations.
+1. [Overview](#overview)  
+2. [Skills Demonstrated](#skills-demonstrated)  
+3. [Why This Matters](#why-this-matters)  
+4. [Lab Environment & Topology](#lab-environment--topology)  
+5. [Splunk Configuration & Ingestion Validation](#splunk-configuration--ingestion-validation)  
+6. [Pre-Attack Assessment](#pre-attack-assessment)  
+7. [Pre-Attack Tuning (Kali)](#pre-attack-tuning-kali)  
+8. [Executing the Slowloris Attack](#executing-the-slowloris-attack)  
+9. [Evidence & Attack Verification](#evidence--attack-verification)  
+   - [Apache Error Log Evidence](#apache-error-log-evidence-splunk)  
+   - [Application Availability Impact](#application-availability-impact)  
+10. [Technical Analysis — Why the Attack Worked](#technical-analysis--why-the-attack-worked)  
+11. [Detection Engineering Insights](#detection-engineering-insights)  
+12. [Security Impact](#security-impact)  
+13. [Mitigation Recommendations](#mitigation-recommendations)  
+14. [Summary Outcomes](#summary-outcomes)  
+15. [Ethical Notice](#ethical-notice)
 
----
+
+## Overview
+A controlled study of application-layer Denial-of-Service (Slowloris) against an Apache2 web server in an isolated VirtualBox sandbox. The exercise focused on attack mechanics, SIEM ingestion and detection, packet- and host-level telemetry analysis, and operational mitigations.
 
 ## Skills demonstrated
 - Application-layer DoS emulation (Slowloris)  
 - VirtualBox sandbox and pfSense topology management  
-- SIEM ingestion and monitoring (Splunk)  
-- Reconnaissance with `nmap`  
-- Network forensics (Splunk)  
-- Host forensics (Apache logs)  
+- SIEM ingestion and detection engineering (Splunk)  
+- Network discovery and reconnaissance (Nmap)  
+- Packet- and host-level forensics (Wireshark, tcpdump, Apache logs)  
 - Reproducible documentation and defensive recommendations
 
----
-
 ## Why this matters
-Slowloris-style attacks can render web services unavailable while using very little bandwidth. Demonstrating both attack execution and detection in Splunk shows I can reason about attack techniques and operationalize detection/response — a key skill for SOC analysts, security engineers, and GRC practitioners.
+Slowloris-style attacks can render web services unavailable while using very little bandwidth. Demonstrating both attack execution and detection shows the ability to reason about attacker techniques, validate telemetry, and operationalize detection and response.
 
 ---
 
-## Lab environment & brief topology
-I built an isolated sandbox in VirtualBox and used pfSense as the firewall/router between two /24 subnets.
+## Lab environment & topology
+- **Network A (internal)** — `192.168.1.0/24`  
+  - Ubuntu (Web server / Apache2): `192.168.1.10`  
+  - Windows XP (Workstation): `192.168.1.15`  
+- **Network B (attacker / external)** — `192.168.2.0/24`  
+  - Kali Linux (Attacker): `192.168.2.16`  
+- **Router / Firewall:** pfSense (LAN <-> Network A, OPT1/WAN <-> Network B)  
+- **Monitoring:** Splunk (ingesting `/var/log/apache2/access.log` and `/var/log/apache2/error.log`)
 
-**Network A (internal)** — `192.168.1.1/24`  
-- Ubuntu (Web Server / Victimm / Apache2): **`192.168.1.10`**  
-- Windows XP (Workstation): `192.168.1.15`
-
-**Network B (attacker / external)** — `192.168.2.1/24`  
-- Kali Linux (Attacker): **`192.168.2.16`**
-
-**Router / Firewall**: pfSense (LAN <-> Network A, OPT1/WAN <-> Network B)  
-**Monitoring**: Splunk (configured to ingest `/var/log/apache2/access.log` and `/var/log/apache2/error.log`)
-
-<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/9eeca3498fec829bbb37bbe6dd78d8206148d887/assets/Topology.png" alt="Lab Network Topology" width="500">
-
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/9eeca3498fec829bbb37bbe6dd78d8206148d887/assets/Topology.png" alt="Lab Network Topology" width="600">
 
 ---
 
-## Splunk: what I configured & how I validated ingestion
-I configured Splunk to ingest the two Apache log files from the victim VM:
+## Splunk: configuration & ingestion validation
+Configured Splunk to ingest Apache logs from the victim VM:
 
 - `/var/log/apache2/access.log` (sourcetype: `apache:access`)  
-- `/var/log/apache2/error.log` (sourcetype: `apache:error`)
+- `/var/log/apache2/error.log` (sourcetype: `apache:error`)  
 
+Validation steps:
+1. Confirmed log files appear in Splunk with expected sourcetypes.  
+2. Built initial search to surface `MaxRequestWorkers` and related Apache errors.  
+3. Correlated timestamps between Splunk events and live availability tests.
 
-# Pre-Attack Assessment 
+---
 
-**From the attacker (Kali):**
-- **Quick port/service scan**
-  
-  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/503a6d2df94b20090fcf65b02b8dff522f44c16c/assets/nmap-before.png" alt="Nmap Scan Before Attack" width="500">
+## Pre-attack assessment
+From the attacker VM (Kali):
 
-- ****Confirm HTTP service****
-  ```bash
-  $ curl http://192.168.1.10/testsplunk
-  ```
+- Performed quick port/service enumeration with Nmap.  
+  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/503a6d2df94b20090fcf65b02b8dff522f44c16c/assets/nmap-before.png" alt="Nmap Scan Before Attack" width="600">
 
-  <div style="display: flex; gap: 20px;">
-    <img 
-    src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/e1d86277e7dc1562869b93d4e2f61481ca64b43f/assets/curl-before.png"
-    alt="Curl Output Before Attack"
-    width="425"
-    >
-    <img 
-    src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/main/assets/curlLog-before.png"
-    alt="Curl Log Before Attack"
-    width="460"
-    >
-  </div>
+- Verified HTTP service with curl:
+```bash
+curl http://192.168.1.10/testsplunk
+```
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/e1d86277e7dc1562869b93d4e2f61481ca64b43f/assets/curl-before.png" alt="Curl Output Before Attack" width="425">
 
+---
 
-# Pre-attack tuning (what I changed on Kali)(((
-- ***Slowloris uses lots of sockets***
-- ***So I increased file-descriptor limits on Kali before running***
+## Pre-attack tuning (Kali)
+Slowloris uses many sockets; increased file-descriptor limits before running:
 
-  - Soft Limit
-    ```bash
-    $   ulimit -S -n 8192
-    ```
-    
-  - Hard Limit 
-    ```bash
-    $   ulimit -S -n 16384
-    ```
-    
-# Executing Slowloris Attack 
-***Command Used***
+```bash
+# Soft limit
+ulimit -S -n 8192
 
-    
-    $   slowloris -v -0 80 -s 1500 --sleeptime 192.168.1.10
-    
-    
-***Command Explanation***
-- -v = verbose
+# Hard limit
+ulimit -H -n 16384
+```
+
+## Executing the Slowloris attack
+
+Command used:
+```bash
+slowloris -v -p 80 -s 1500 --sleeptime 10 192.168.1.10
+```
+
+Command explanation:
+- -v = verbose output
 - -p 80 = HTTP port
-- -s 1500 = socket count (tuned to VM limits)
-- --sleeptime 10 = seconds between header refreshes
+- -s 1500 = number of sockets (tuned to VM limits)
+- --sleeptime 10 = seconds between header refresh attempts
 
-***Slowloris Running***
+Attack visualization:
 
-<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/slowloris-attack.png" alt="Slowloris Attack Visualization" width="500">
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/slowloris-attack.png" width="600">
 
+## Evidence & Attack Verification
 
-***How I verified this was Slowloris (evidence & indicators)***
+### Apache Error Log Evidence (Splunk)
+Splunk detected worker exhaustion indicators during the attack window.
 
-- I confirmed the attack type by correlating two independent indicators (these are exactly the things I used):
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/splunk-maxrequestworkers.png" width="600">
 
-**1. Apache error.log evidence**
+---
 
-- Splunk showed MaxRequestWorkers reached and similar exhaustion errors while the attack was running. 
+### Application Availability Impact
+Application-layer failure was confirmed using cross-terminal testing.
 
-  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/splunk-maxrequestworkers.png" alt="Splunk Max Request Workers Chart" width="600">
+- HTTP requests stalled during the attack  
+- ICMP traffic remained functional  
 
+This confirmed application-layer resource exhaustion rather than a full network outage.
 
-**2. Application-level availability effect**
+<img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7de1c7d00/assets/ping-after.png" width="500">
 
-- curl from another terminal stalled
-- while ICMP (ping) still worked
-- indicating application-layer (HTTP) exhaustion rather than network down 
+---
 
-  <img src="https://raw.githubusercontent.com/VanshBhardwaj1945/slowloris-dos-attack-lab-/f32ab6abddd5fb991a9310c2a7fe3ab9de1c7d00/assets/ping-after.png" alt="Ping After Attack" width="500">
+## Technical Analysis — Why the Attack Worked
 
+Slowloris succeeds by exhausting application resources rather than bandwidth.
 
-Because all both indicators aligned (error logs and application-level failure), I concluded the observed behavior was Slowloris.
+### Attack Mechanics
+- Opens many concurrent HTTP connections  
+- Sends HTTP headers extremely slowly  
+- Keeps connections alive using periodic header refreshes  
+- Prevents Apache from completing request processing  
 
+### Server-Side Behavior
+- Apache assigns worker threads per connection  
+- Workers remain locked waiting for full HTTP headers  
+- Keep-alive and timeout configurations allowed connections to persist  
+- Eventually MaxRequestWorkers was reached  
 
-# Analysis — why the attack worked
+### Environmental Vulnerability Factors
+- Worker limits were low relative to socket volume  
+- Permissive keep-alive and timeout settings  
+- Increased attacker socket capacity via ulimit tuning  
 
-***Quick executive takeaway***
+---
 
-- This Slowloris attack succeeded by exhausting Apache’s request‑handling capacity, not by overwhelming network bandwidth. I demonstrated the attack, observed the failure mode in real time, and mapped it directly to defensive controls.
+## Detection Engineering Insights
 
-***What the attack does*** 
-- Opens many HTTP connections to Apache
-- Sends incomplete HTTP headers very slowly
-- keeps connections alive indefinitely by periodically refreshing headers
-- Prevents requests from ever completing
-  
-***What Apache did internally***
-- Assigned a worker thread/process to each incoming connection
-- Waited for headers to fully arrive before releasing the worker
-- Allowed connections to remain open due to permissive timeout settings
-- Eventually reached the MaxRequestWorkers limit
+Attack detection was validated using multiple independent signals.
 
-***Why hypothetical users were impacted***
-- Once all workers were consumed, Apache could not process new HTTP requests
-- clients experienced stalled or timed‑out connections
-- ICMP traffic continued to function, confirming the host and network were still up
-- This confirmed an application‑layer denial of service, not a network outage
+### SIEM Correlation
+- Apache error logs  
+- Availability metrics  
+- Time-synchronized attack activity  
 
-***Why the environment was vulnerable***
-- Apache worker limits were low relative to the attack’s socket volume
-- Header and keep‑alive timeouts allowed connections to persist too long
-- Kali’s increased file‑descriptor limit (ulimit -n) enabled thousands of concurrent sockets with minimal bandwidth usage
+### Packet-Level Indicators
+- Partial or incomplete HTTP headers  
+- Long-lived TCP sessions without completed requests  
 
-***How I confirmed it was Slowloris***
-- Apache error logs showed worker exhaustion (MaxRequestWorkers reached)
-- Packet captures showed partial and incomplete HTTP headers
-- Splunk correlated Apache errors with service unavailability during the attack window
-- Live testing showed HTTP failure while other protocols remained responsive
+---
 
-***Security impact***
-- A small number of attacker resources caused full service degradation
-- Traditional network‑volume monitoring would not detect this attack
-- Proper application‑layer logging and alerting were required to identify the root cause
+## Security Impact
 
-***Why this matters to security roles***
-- Demonstrates understanding of application‑layer DoS mechanics
-- Shows ability to validate attacks using SIEM, packet analysis, and live service testing
-- Connects technical behavior to concrete mitigation strategies
-- Reflects real SOC, security engineering, and GRC decision‑making skills
+- Demonstrated that low-bandwidth application-layer attacks can cause full service degradation  
+- Reinforced the importance of application telemetry monitoring  
+- Showed need for layered security beyond network monitoring  
 
+---
 
-# Ethical notice & scope
+## Mitigation Recommendations
 
-All testing was performed inside an authorized, isolated lab environment. This documentation is for defensive education only. Do not run these steps against systems you do not own or are not authorized to test.
+### Application Hardening
+- Tune Apache worker and timeout thresholds  
+- Implement per-IP rate limiting  
+- Restrict persistent connections where possible  
 
+### Architecture Defenses
+- Deploy reverse proxies or load balancers  
+- Add upstream connection throttling  
+
+### Detection Improvements
+- Create SIEM alerts for worker exhaustion patterns  
+- Monitor abnormal connection persistence behavior  
+
+---
+
+## Summary Outcomes
+- Successfully executed and documented Slowloris DoS testing in an isolated environment  
+- Built detection validation workflows using SIEM and telemetry  
+- Produced defensive guidance and reproducible test evidence  
+
+## Ethical Notice
+All testing was performed in an authorized, isolated lab environment for defensive research purposes only. Do not reproduce on systems you do not own or have permission to test.
