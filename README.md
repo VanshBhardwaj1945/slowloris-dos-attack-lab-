@@ -18,6 +18,7 @@ The two parts tell one story: first stand up and lock down a realistic network, 
 ## Table of Contents
 
 **Part 1 — Network Segmentation & Access Control**
+
 1. [Overview](#part-1-overview)
 2. [Sandbox Components](#sandbox-components)
 3. [Tools & Technologies](#tools--technologies-used)
@@ -30,20 +31,22 @@ The two parts tell one story: first stand up and lock down a realistic network, 
 10. [Part 1 Outcomes](#part-1-outcomes)
 
 **Part 2 — Slowloris Application-Layer DoS**
-11. [Overview](#part-2-overview)
-12. [Skills Demonstrated](#skills-demonstrated)
-13. [Why This Matters](#why-this-matters)
-14. [Lab Environment & Topology](#lab-environment--topology)
-15. [Splunk Configuration & Ingestion Validation](#splunk-configuration--ingestion-validation)
-16. [Pre-Attack Assessment](#pre-attack-assessment)
-17. [Pre-Attack Tuning (Kali)](#pre-attack-tuning-kali)
-18. [Executing the Slowloris Attack](#executing-the-slowloris-attack)
-19. [Evidence & Attack Verification](#evidence--attack-verification)
-20. [Technical Analysis — Why the Attack Worked](#technical-analysis--why-the-attack-worked)
-21. [Detection Engineering Insights](#detection-engineering-insights)
-22. [Security Impact](#security-impact)
-23. [Mitigation Recommendations](#mitigation-recommendations)
-24. [Part 2 Outcomes](#part-2-outcomes)
+
+12. [Overview](#part-2-overview)
+13. [Skills Demonstrated](#skills-demonstrated)
+14. [Why This Matters](#why-this-matters)
+15. [Lab Environment & Topology](#lab-environment--topology)
+16. [Splunk Configuration & Ingestion Validation](#splunk-configuration--ingestion-validation)
+17. [Pre-Attack Assessment](#pre-attack-assessment)
+18. [Pre-Attack Tuning (Kali)](#pre-attack-tuning-kali)
+19. [Executing the Slowloris Attack](#executing-the-slowloris-attack)
+20. [Evidence & Attack Verification](#evidence--attack-verification)
+21. [Technical Analysis — Why the Attack Worked](#technical-analysis--why-the-attack-worked)
+22. [Detection Engineering Insights](#detection-engineering-insights)
+23. [Security Impact](#security-impact)
+24. [Mitigation Recommendations](#mitigation-recommendations)
+25. [Part 2 Outcomes](#part-2-outcomes)
+
 
 [Ethical Notice](#ethical-notice)
 
