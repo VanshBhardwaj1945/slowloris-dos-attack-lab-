@@ -42,7 +42,7 @@ If you act in good faith to report a valid issue and follow this policy (report 
 - Follow all applicable laws and your organization’s policies.
 
 ## Contact & escalation
-- Primary: `REPLACE_WITH_YOUR_EMAIL`  
+- Primary: `Scorpio.vansh@gmail.com`  
 - GitHub: `https://github.com/VanshBhardwaj1945` (private issue / direct message)  
 - If needed, escalate to GitHub Security if you cannot reach me.
 
